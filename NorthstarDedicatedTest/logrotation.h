@@ -1,3 +1,3 @@
 #pragma once
 
-void logRotation(int days);
+void deleteOldLogs(int days = 30);

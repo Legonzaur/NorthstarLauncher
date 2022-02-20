@@ -6,34 +6,36 @@
 #include <regex>
 #include "configurables.h"
 
-namespace fs = std::filesystem;
 using namespace std;
+namespace fs = filesystem;
+
+static regex log_old ("nslog([0-9]{2}-){2}[0-9]{4}\ [0-9]{2}(-[0-9]{2}){2}.txt");
+static regex log_new("nslog[0-9]{4}(-[0-9]{2}){2}\ [0-9]{2}(-[0-9]{2}){2}.txt");
+static regex dmp_old("nsdump([0-9]{2}-){2}[0-9]{4}\ [0-9]{2}(-[0-9]{2}){2}.dmp");
 
 const int seconds_in_day = 86400;
 
-double getLogAge(const fs::path path)
+time_t getLogTime(const fs::path path)
 {
-	time_t logtime;
-	time_t currenttime;
 	struct tm timeinfo = {0};
 	int year, month, day;
 	string filename = path.filename().string();
 	// Check if log has a correct name
-	if (regex_search(filename, regex("nslog([0-9]{2}-){2}[0-9]{4}\ [0-9]{2}(-[0-9]{2}){2}.txt")))
+	if (regex_search(filename, log_old))
 	{
 		// Log naming before 1.4.0, which released on January 06 2022
 		year = stoi(filename.substr(11, 4));
 		month = stoi(filename.substr(8, 2));
 		day = stoi(filename.substr(5, 2));
 	}
-	else if (regex_search(filename, regex("nsdump([0-9]{2}-){2}[0-9]{4}\ [0-9]{2}(-[0-9]{2}){2}.dmp")))
+	else if (regex_search(filename, dmp_old))
 	{
 		// Dumps
 		year = stoi(filename.substr(12, 4));
 		month = stoi(filename.substr(9, 2));
 		day = stoi(filename.substr(6, 2));
 	}
-	else if (regex_search(filename, regex("nslog[0-9]{4}(-[0-9]{2}){2}\ [0-9]{2}(-[0-9]{2}){2}.txt")))
+	else if (regex_search(filename, log_new))
 	{
 		// Log naming after 1.4.0
 		year = stoi(filename.substr(5, 4));
@@ -51,13 +53,13 @@ double getLogAge(const fs::path path)
 	timeinfo.tm_mon = month - 1;
 	timeinfo.tm_mday = day;
 
-	logtime = mktime(&timeinfo);
-	time(&currenttime);
-	return difftime(currenttime, logtime);
+	return mktime(&timeinfo);
 }
 
-void logRotation(int days = 7)
+void deleteOldLogs(int days)
 {
+	time_t currenttime;
+	time(&currenttime);
 	string path = GetNorthstarPrefix() + "/logs";
 	struct stat info;
 	// Check if we can access log directory
@@ -71,7 +73,7 @@ void logRotation(int days = 7)
 		string extension = link.extension().string();
 		if (extension == ".txt" || extension == ".dmp")
 		{
-			if (getLogAge(link) > seconds_in_day * days)
+			if (difftime(currenttime, getLogTime(link)) > seconds_in_day * days)
 			{
 				remove(link);
 			}
